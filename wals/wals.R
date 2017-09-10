@@ -12,8 +12,7 @@ suppressPackageStartupMessages({
 })
 
 URL <- "http://wals.info/static/download/wals-language.csv.zip"
-INPUTS <- list(wals_updates = "wals-updates.csv",
-               sql = "wals.sql")
+INPUTS <- list(wals_updates = "wals-updates.csv")
 OUTFILE <- "wals.db"
 VERSION <- "1.0.0"
 
@@ -52,11 +51,7 @@ wals <-
 #' check that WALS codes are still unique ID
 assert_that(!any(duplicated(wals$wals_code)))
 
-#' Initialize the database
-if (file.exists(OUTFILE)) {
-  file.remove(OUTFILE)
-}
-system2("sqlite3", args = c(OUTFILE, str_c('".read ', INPUTS$sql, '"')))
+#' The database should already have been created and initialized
 conn <- dbConnect(RSQLite::SQLite(), OUTFILE)
 
 write_table <- function(df, name) {

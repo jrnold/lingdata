@@ -10,7 +10,7 @@ CREATE TABLE genuses (
     FOREIGN KEY (family) REFERENCES families (family)
 );
 
-CREATE TABLE macroarea (
+CREATE TABLE macroareas (
     macroarea TEXT NOT NULL PRIMARY KEY
 );
 

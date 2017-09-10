@@ -1,21 +1,22 @@
+LINGDATA_S3_BUCKET ?= s3://jrnold-data/lingdata/
+
+DB = wals glottolog asjp iso_639_3 ethnologue
+
 all: build
 .PHONY: all
 
-build: wals glottolog asjp iso639
+build:
+	for dir in $(DB); do \
+		make -C $$dir build; \
+	done
 .PHONY: build
 
-wals:
-	make -C wals
-.PHONY: wals
+dump: $(patsubst %,dumps/%.sql.gz,$(DB))
+.PHONY: dump
 
-glottolog:
-	make -C glottolog
-.PHONY: glottolog
+dumps/%.sql.gz: %/%.db
+	sqlite3 $< .dump | gzip -c > $@
 
-asjp:
-	make -C asjp
-.PHONY: asjp
-
-iso639:
-	make -C iso639
-.PHONY: iso639
+dist: dump
+	aws s3 sync dumps/ $(LINGDATA_S3_BUCKET)
+.PHONY: dist

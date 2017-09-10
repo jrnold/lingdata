@@ -9,8 +9,8 @@ import requests
 
 CURRENT_DATE = "20170217"
 
-URL = (f"http://www-01.sil.org/iso639-3/"
-       "iso-639-3_Code_Tables_{CURRENT_DATE}.zip")
+URL = ("http://www-01.sil.org/iso639-3/"
+       f"iso-639-3_Code_Tables_{CURRENT_DATE}.zip")
 
 REGEXEN = (
     ("iso_639_3", r".*/iso-639-3_(\d+).tab"),
