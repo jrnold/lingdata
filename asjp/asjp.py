@@ -4,14 +4,16 @@ import itertools
 import json
 import os
 import re
-import requests
 import sqlite3
 import zipfile
+from collections import defaultdict
 
-import pandas as pd
 import Levenshtein
+import pandas as pd
+import requests
 
 URL = "http://asjp.clld.org/static/download/asjp-dataset.tab.zip"
+
 
 def create_tables(conn):
     c = conn.cursor()
@@ -68,19 +70,21 @@ def insert_meanings(conn):
                   (meaning, v['id'], v['in_forty']))
     conn.commit()
 
-# Iterate over all pairs of languages; the comparison removes duplicate and self-comparisons.
-
+# Iterate over all pairs of languages; the comparison removes duplicate
+# and self-comparisons.
 # - Calculate LD, LDN, and LDND for all pairs
 # - use Futures for multiprocessing
 # - save to database
 
-def lexidists(words1, words2, min_words = 2):
+
+def lexidists(words1, words2, min_words=2):
     ldn_sum = 0.
     ldnd_denom = 0.
     common_words = set(words1.keys()) & set(words2.keys())
     M = len(common_words)
     if (M > min_words):
-        for meaning1, meaning2 in itertools.product(common_words, common_words):
+        for meaning1, meaning2 in itertools.product(common_words,
+                                                    common_words):
             # ignore duplicated non-equal meanings
             if meaning1 > meaning2:
                 continue
@@ -97,6 +101,7 @@ def lexidists(words1, words2, min_words = 2):
                 # The  (M * (M - 1) / 2) / M = (M - 1) / 2
                 'ldnd': 0.5 * (M - 1) * ldn_sum / ldnd_denom,
                 'M': M}
+
 
 def compare_langs(lang1, lang2):
     # each language is a name (str), wordlist (dict) tuple
@@ -168,7 +173,7 @@ def run(dbname):
         WHERE in_forty AND NOT loanword
     """)
 
-    wordlist_dict = collections.defaultdict(lambda: collections.defaultdict(list))
+    wordlist_dict = defaultdict(lambda: collections.defaultdict(list))
 
     for language, meaning, word in res:
         wordlist_dict[language][meaning].append(word)
@@ -182,7 +187,6 @@ def run(dbname):
     results = (compare_langs(*x) for x in wordlist_iter)
     batch = []
     for i, res in enumerate(results):
-        #print(i)
         if res:
             batch.append(res)
         if ((i + 1) % update_intvl == 0):

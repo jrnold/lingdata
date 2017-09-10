@@ -53,7 +53,7 @@ wals <-
 assert_that(!any(duplicated(wals$wals_code)))
 
 #' Initialize the database
-if (!file.exists(OUTFILE)) {
+if (file.exists(OUTFILE)) {
   file.remove(OUTFILE)
 }
 system2("sqlite3", args = c(OUTFILE, str_c('".read ', INPUTS$sql, '"')))

@@ -1,2 +1,6 @@
 *.db
 .ipynb_checkpoints/
+*.RData
+*.Rhistory
+__pycache__
+.Rhistory

@@ -8,9 +8,10 @@ import sys
 
 import newick
 import requests
-import yaml
 
-URLS = {'glottolog-newick': 'http://glottolog.org/static/download/tree-glottolog-newick.txt'}
+URLS = {'glottolog-newick':
+        'http://glottolog.org/static/download/tree-glottolog-newick.txt'}
+
 
 def parse_node(x):
     node_pattern = """^'?
@@ -25,16 +26,19 @@ def parse_node(x):
         out['language'] = out['language'] is not None
         return out
 
+
 def walk_tree(x):
     node = parse_node(x.name)
     node['children'] = [walk_tree(n) for n in x.descendants]
     return node
+
 
 def run(url, dst):
     r = requests.get(url)
     tree = newick.loads(r.text)
     glottolog_tree = [walk_tree(branch) for branch in tree]
     json.dump(glottolog_tree, dst)
+
 
 def main():
     parser = argparse.ArgumentParser()
