@@ -17,5 +17,5 @@ asjp:
 .PHONY: asjp
 
 iso639:
-  make -C iso639
+	make -C iso639
 .PHONY: iso639

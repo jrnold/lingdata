@@ -28,5 +28,6 @@ def main():
     db = "ethnologue.db"
     insert_data(db)
 
+
 if __name__ == '__main__':
     main()
