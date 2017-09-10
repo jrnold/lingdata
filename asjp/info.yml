@@ -1,5 +1,0 @@
-newick-tree: http://glottolog.org/static/download/tree-glottolog-newick.txt
-lang_geo: http://glottolog.org/static/download/languages-and-dialects-geo.csv
-resourcemap: http://glottolog.org/resourcemap.json?rsc=language
-languoids_csv: http://glottolog.org/static/download/glottolog-languoid.csv.zip
-languoids_rdf: http://glottolog.org/static/download/glottolog-language.n3.gz

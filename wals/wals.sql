@@ -49,7 +49,6 @@ CREATE TABLE faeture_values (
     FOREIGN KEY (feature_id) REFERENCES features (feature_id)
 );
 
-
 CREATE TABLE language_features (
     wals_code CHAR(3) NOT NULL,
     feature_id CHAR(4) NOT NULL,

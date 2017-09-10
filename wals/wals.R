@@ -4,10 +4,12 @@
 #'
 #' Tidies the WALS dataset to make it easier for analyis.
 #' Dumps the results to a database
-library("tidyverse")
-library("stringr")
-library("assertthat")
-library("RSQLite")
+suppressPackageStartupMessages({
+  library("tidyverse")
+  library("stringr")
+  library("assertthat")
+  library("RSQLite")
+})
 
 URL <- "http://wals.info/static/download/wals-language.csv.zip"
 INPUTS <- list(wals_updates = "wals-updates.csv",
@@ -30,7 +32,7 @@ wals_updates <- read_csv(INPUTS$wals_updates,
 walszipfile <- tempfile()
 download.file(URL, walszipfile)
 
-wals_raw <-
+wals <-
   read_csv(unz(walszipfile, "language.csv"),
                     col_types = cols(
                       .default = col_character(),
@@ -48,10 +50,12 @@ wals_raw <-
   ungroup()
 
 #' check that WALS codes are still unique ID
-assert_that(!any(duplicated(wals_raw$wals_code)))
+assert_that(!any(duplicated(wals$wals_code)))
 
 #' Initialize the database
-file.remove(OUTFILE, showWarnings = FALSE)
+if (!file.exists(OUTFILE)) {
+  file.remove(OUTFILE)
+}
 system2("sqlite3", args = c(OUTFILE, str_c('".read ', INPUTS$sql, '"')))
 conn <- dbConnect(RSQLite::SQLite(), OUTFILE)
 
@@ -60,33 +64,34 @@ write_table <- function(df, name) {
   dbWriteTable(conn, name, df, overwrite = FALSE, append = TRUE)
 }
 
-wals_raw %>%
+wals %>%
   distinct(macroarea) %>%
   arrange(macroarea) %>%
   write_table("macroareas")
 
-wals_raw %>%
+wals %>%
   distinct(genus, family) %>%
   arrange(family, genus) %>%
   write_table("genuses")
 
-wals_raw %>%
+wals %>%
   distinct(family) %>%
   arrange(family) %>%
   write_table("families")
 
 
 #' Language level variables
-select(wals_raw, -matches("^\\d+"), -countrycodes) %>%
+select(wals, -matches("^\\d+"), -countrycodes) %>%
   write_table("languages")
 
-select(wals_raw, wals_code, countrycodes) %>%
+select(wals, wals_code, countrycodes) %>%
   mutate(countrycodes = str_split(countrycodes, " ")) %>%
   unnest() %>%
   rename(countrycode = countrycodes) %>%
   write_table("language_countries")
 
-tibble(variable_ = str_subset(names(wals_raw), "^\\d+")) %>%
+wals_features <-
+  tibble(variable_ = str_subset(names(wals), "^\\d+")) %>%
   mutate(feature_id = map_chr(str_match_all(variable_, "(\\d+[A-Z])"), 2),
          feature_name = map_chr(str_match_all(variable_, "\\d+[A-Z] (.*)"),
                                 2)) %>%
@@ -110,8 +115,9 @@ tibble(variable_ = str_subset(names(wals_raw), "^\\d+")) %>%
          )) %>%
   select(-num) %>%
   # need this to sort them correctly
-  arrange(str_pad(feature_id, width = 4, side = "left", "0")) %>%
-  write_table("features")
+  arrange(str_pad(feature_id, width = 4, side = "left", "0"))
+
+wals_features %>% write_table("features")
 
 #' Data frame of WALS features with the following columns:
 #'
@@ -121,7 +127,7 @@ tibble(variable_ = str_subset(names(wals_raw), "^\\d+")) %>%
 #' - value_number: Value number, e.g. 1, 2, 3, ..., 5
 #' - value_name: Value name, e.g. "Moderately small", "Large", "Small"
 #'
-wals_raw %>%
+wals %>%
   ungroup() %>%
   select(matches("^\\d+")) %>%
   gather(variable_, value_, na.rm = TRUE) %>%
@@ -134,7 +140,7 @@ wals_raw %>%
   write_table("feature_values")
 
 wals_language_features <-
-  wals_raw %>%
+  wals %>%
   ungroup() %>%
   select(wals_code, matches("^\\d+")) %>%
   gather(variable_, value_, -wals_code, na.rm = TRUE) %>%
@@ -145,10 +151,8 @@ wals_language_features <-
 
 write_table(wals_language_features, "language_features")
 
-
-
 dist_geo_clade <-
-  wals_raw %>%
+  wals %>%
   select(wals_code, longitude, latitude, family, genus) %>%
   {crossing(., .)} %>%
   # remove self-matches
@@ -165,7 +169,7 @@ dist_geo_clade <-
   rename(wals_code_1 = wals_code, wals_code_2 = wals_code1) %>%
   gather(variable, value, -wals_code_1, -wals_code_2)
 
-feature_comp <- wals$language_features %>%
+feature_comp <- wals_language_features %>%
   select(wals_code, feature_id, value) %>%
   inner_join(., ., by = "feature_id", suffix = c("_1", "_2")) %>%
   filter(wals_code_1 < wals_code_2) %>%
@@ -178,7 +182,7 @@ feature_dist <- feature_comp %>%
   mutate(variable = "features")
 
 feature_dist_area <- feature_comp %>%
-  left_join(select(wals$features, feature_id, area),
+  left_join(select(wals_features, feature_id, area),
             by = "feature_id") %>%
   mutate(variable = str_to_lower(str_replace(area, " +", "_"))) %>%
   group_by(wals_code_1, wals_code_2, variable) %>%

@@ -3,9 +3,12 @@ import csv
 import io
 import json
 import zipfile
+import os
 import functools
+import itertools
 from itertools import chain
 import re
+import sqlite3
 
 import yaml
 import newick
@@ -13,7 +16,7 @@ import numpy as np
 import pandas as pd
 import requests
 import geopy
-from geopy.distance import vincenty
+from geopy.distance import great_circle
 
 INPUTS = {'tree-glottolog': 'glottolog-tree.json'}
 
@@ -23,40 +26,74 @@ URLS = {
     'resourcemap': 'http://glottolog.org/resourcemap.json?rsc=language'
 }
 
+DBPATH = "glottolog.db"
+
 """
-CREATE TABLE languages (
-    glottocode CHAR(8) NOT NULL PRIMARY KEY,
-    iso_639_3 CHAR(3),
-    wals_codes CHAR(3),
-    macroarea TEXT,
-
-    latitude REAL CHECK (latitude BETWEEN -90 AND 90),
-    longitude REAL CHECK (longitude BETWEEN -180 AND 180),
-
-    level TEXT CHECK (level IN ('family', 'language', 'dialect')),
-    status TEXT,
-    bookkeeping BOOLEAN,
-
-    parent CHAR(8),
-    depth INT CHECK (depth > 0),
-    subtree_depth INT (subtree_depth >= 0),
-    ancestors TEXT,  -- should go in diff table
-    children TEXT, -- should go in diff table
-    descendants TEXT -- should go in diff table
-
-)
-
-CREATE TABLE distances (
-    glottocode_1 CHAR(8),
-    glottocode_2 CHAR(8),
-    geo REAL CHECK (geo >= 0),
-    shared INT CHECK (shared >= 0),
-    PRIMARY KEY (glottocode_1, glottocode_2),
-    FOREIGN KEY (glottocode_1) REFERENCES languages (glottocode),
-    FOREIGN KEY (glottocode_2) REFERENCES languages (glottocode)
-)
+- subtree_depth: It is a leaf node if = 0, but this is more general
+- depth: It is a family if depth = 1.
 """
 
+
+
+SQL_DDL = """
+    CREATE TABLE languages (
+        glottocode CHAR(8) NOT NULL PRIMARY KEY,
+        latitude REAL CHECK (latitude BETWEEN -90 AND 90),
+        longitude REAL CHECK (longitude BETWEEN -180 AND 180),
+        level TEXT CHECK (level IN ('family', 'language', 'dialect')),
+        status TEXT,
+        bookkeeping BOOLEAN,
+        parent CHAR(8),
+        depth INT CHECK (depth > 0),
+        subtree_depth INT CHECK (subtree_depth >= 0)
+    );
+    CREATE TABLE paths (
+        glottocode CHAR(8),
+        glottocode_to CHAR(8),
+        dist INT CHECK (dist != 0), -- can be negative or positive
+        PRIMARY KEY (glottocode, glottocode_to),
+        FOREIGN KEY (glottocode) REFERENCES languages (glottocode),
+        FOREIGN KEY (glottocode_to) REFERENCES languages (glottocode)
+    );
+    CREATE TABLE distances (
+        glottocode_1 CHAR(8),
+        glottocode_2 CHAR(8),
+        shared INT CHECK (shared >= 0),
+        geo REAL CHECK (geo >= 0),
+        PRIMARY KEY (glottocode_1, glottocode_2),
+        FOREIGN KEY (glottocode_1) REFERENCES languages (glottocode),
+        FOREIGN KEY (glottocode_2) REFERENCES languages (glottocode)
+    );
+    CREATE TABLE wals_codes (
+        glottocode CHAR(8) NOT NULL,
+        wals_code CHAR(3) NOT NULL,
+        PRIMARY KEY (glottocode, wals_code),
+        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+    );
+    CREATE TABLE iso_code (
+        glottocode CHAR(8) NOT NULL,
+        iso_639_3 CHAR(3) NOT NULL,
+        PRIMARY KEY (glottocode, iso_639_3),
+        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+    );
+    CREATE TABLE macroareas (
+        glottocode CHAR(8) NOT NULL,
+        macroarea TEXT NOT NULL,
+        PRIMARY KEY (glottocode, macroarea),
+        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+    );
+"""
+
+
+def set2str(x):
+    return ' '.join(x) if len(x) else None
+
+def table_colnames(conn, table):
+    """ Get colnames of SQLITE table """
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM {table}")
+    r = c.fetchone()
+    return [x[0] for x in r.description]
 
 def get_languoids():
     """ Download Glottolog Languoids Data """
@@ -72,10 +109,8 @@ def get_languoids():
     languoids.set_index('glottocode', inplace=True)
     return languoids
 
-
 def get_lang_geo():
     return pd.read_csv(URLS['lang_geo'], index_col="glottocode")
-
 
 def get_resourcemap():
     return requests.get(URLS['resourcemap']).json()
@@ -86,7 +121,6 @@ def is_wals_lang_id(x):
 def is_iso_lang_id(x):
     return x['type'] == "iso639-3" and re.match("[a-z]{3}$", x['identifier'])
 
-
 def walk_tree(x, depth=1, ancestors=[], family=None, newdata = {}):
     """ Depth first search through tree
 
@@ -94,21 +128,26 @@ def walk_tree(x, depth=1, ancestors=[], family=None, newdata = {}):
     """
     glottocode = x["glottocode"]
     data = newdata[glottocode]
+
     if depth == 1:
         data['family'] = glottocode
     else:
         data['family'] = family
-    f = functools.partial(walk_tree, depth=depth + 1,
-                          family=data['family'],
-                          ancestors = ancestors + [glottocode],
-                          newdata = newdata)
+    f = functools.partial(walk_tree, depth=depth + 1, family=data['family'],
+                          ancestors=ancestors + [glottocode],
+                          newdata=newdata)
     children_data = [f(child) for child in x["children"]]
-    data['descendants'] = set()
     for c in children_data:
-        data['descendants'].update(c['glottocodes'])
         data['wals_codes'].update(c['wals_codes'])
         data['iso_639_3'].update(c['iso_639_3'])
         data['macroarea'].update(c['macroarea'])
+
+    # Bump descendants back one level
+    data['descendants'] = {}
+    for c in children_data:
+        data['descendants'][c['glottocode']] = -1
+        for k, v in c['descendants'].items():
+            data['descendants'][k] = v - 1
 
     # this isn't the right way to average over geographic points. Need to find the
     # python equivalent of geosphere
@@ -121,32 +160,30 @@ def walk_tree(x, depth=1, ancestors=[], family=None, newdata = {}):
         child_long = [c['longitude'] for c in children_data
                       if c['longitude'] and not pd.isnull(c['longitude'])]
         data['longitude'] = np.mean(child_long) if len(child_long) else None
-    if len(children_data):
-        subtree_depth = max(c['subtree_depth'] for  c in children_data) + 1
+
+    if len(data['descendants']):
+        subtree_depth = -1 * min(data['descendants'].values())
     else:
         subtree_depth = 0
 
-    #geo_lookup[[glottocode]]
+    parent = ancestors[-1] if len(ancestors) else None
+
     data.update({
-        'parent': ancestors[-1] if len(ancestors) else None,
-        'children': [child['glottocode'] for child in x["children"]],
+        'parent': parent,
         'ancestors': ancestors,
         'depth': depth,
+        'family': family,
         'subtree_depth': subtree_depth,
-        'family': family
     })
-
     return {
-        'glottocodes': set([glottocode] + list(data['descendants'])),
+        'glottocode': data['glottocode'],
+        'descendants': data['descendants'],
         'iso_639_3': data['iso_639_3'],
         'wals_codes': data['wals_codes'],
         'macroarea': data['macroarea'],
         'latitude': data['latitude'],
         'longitude': data['longitude'],
-        'subtree_depth': subtree_depth,
-        'family': data['family']
     }
-
 
 def topdown_fill(x, newdata = {}):
     """ Fill in data from parents """
@@ -162,12 +199,7 @@ def topdown_fill(x, newdata = {}):
     for child in x['children']:
         topdown_fill(child, newdata)
 
-def clean_row(row):
-    for k, v in row.items():
-        if isinstance(v, set):
-            row[k] = list(v)
-
-def create_langdata():
+def create_langdata(glottolog_tree):
     # Get external data
     resourcemap = get_resourcemap()
     languoids = get_languoids()
@@ -209,34 +241,135 @@ def create_langdata():
     return newdata
 
 def create_distmat(newdata):
-    language_dists = []
     langsdata = [x for x in newdata.values() if x['level']
                  in ("language", "dialect") and "family" in x]
     for lang1, lang2 in itertools.product(langsdata, langsdata):
         if (lang1["glottocode"] != lang2["glottocode"] and
                 lang1["family"] == lang2["family"]):
             shared = len(set(lang1['ancestors']) & set(lang2['ancestors']))
-            geo = vincenty((lang1['latitude'], lang2['longitude']),
-                           (lang2['latitude'], lang2['longitude']))
-            language_dists.append({'glottocode_from': lang1["glottocode"],
-                                   'glottocode_to': lang2["glottocode"],
-                                   'shared': shared,
-                                   'geo': geo
-                                  })
-    return language_dists
+            geo = great_circle((lang1['latitude'], lang2['longitude']),
+                               (lang2['latitude'], lang2['longitude']))
+            yield (lang1["glottocode"], lang2["glottocode"], shared, geo.m)
 
-def run(glottolog_tree):
-    langdata = create_langdata()
-    dists = create_distmat(langdata)
 
-    newdata = [clean_row(row) for row in newdata.values()]
-    with open('foo.json', 'w') as f:
-        json.dump(newdata, f, indent = 2)
+def insert_languages(conn, langdata):
+    """ Insert data into languaeg data """
+    colnames = ('glottocode',
+                'latitude',
+                'longitude',
+                'level',
+                'status',
+                'bookkeeping',
+                'parent',
+                'depth',
+                'subtree_depth')
+
+
+    def iterrows(langdata):
+        for lang in langdata:
+            row = (
+                lang['glottocode'],
+                lang['latitude'],
+                lang['longitude'],
+                lang['level'],
+                lang['status'],
+                lang['bookkeeping'],
+                # bookkeeping entries aren't in the hierarchy
+                lang.get('parent'),
+                lang.get('depth'),
+                lang.get('subtree_depth')
+            )
+            yield row
+
+    c = conn.cursor()
+    sql = ("INSERT INTO languages VALUES (%s)" %
+           ', '.join(['?'] * len(colnames)))
+    c.executemany(sql, iterrows(langdata))
+    conn.commit()
+
+
+def insert_paths(conn, langdata):
+    """ Insert data into """
+    def iterlangs(langdata):
+        # Get ancestors
+        for lang in langdata:
+            # Bookkeeping entries dont' have tree info
+            try:
+                for i, node in enumerate(reversed(lang['ancestors'])):
+                    yield (lang['glottocode'], node, i + 1)
+            except KeyError:
+                pass
+            # Get descendants
+            try:
+                for k, v in lang['descendants'].items():
+                    yield (lang['glottocode'], k, v)
+            except KeyError:
+                pass
+    c = conn.cursor()
+    sql = "INSERT INTO paths VALUES (?, ?, ?)"
+    c.executemany(sql, iterlangs(langdata))
+    conn.commit()
+
+def insert_distances(conn, distances):
+    c = conn.cursor()
+    sql = "INSERT INTO distances VALUES (?, ?, ?, ?)"
+    c.executemany(sql, distances)
+    conn.commit()
+
+def insert_iso_codes(conn, langdata):
+    def iterlangs(langdata):
+        for lang in langdata:
+            for iso_code in lang['iso_639_3']:
+                yield(lang['glottocode'], iso_code)
+    c = conn.cursor()
+    sql = "INSERT INTO iso_codes VALUES (?, ?)"
+    c.executemany(conn, iterlangs(langdata))
+    conn.commit()
+
+def insert_wals_codes(conn, langdata):
+    def iterlangs(langdata):
+        for lang in langdata:
+            for wals_code in lang['wals_codes']:
+                yield(lang['glottocode'], wals_code)
+    c = conn.cursor()
+    sql = "INSERT INTO wals_codes VALUES (?, ?)"
+    c.executemany(conn, iterlangs(langdata))
+    conn.commit()
+
+def insert_macroareas(conn, langdata):
+    def iterlangs(langdata):
+        for lang in langdata:
+            for macroarea in lang['macroarea']:
+                yield(lang['glottocode'], macroarea)
+    c = conn.cursor()
+    sql = "INSERT INTO macroareas VALUES (?, ?)"
+    c.executemany(conn, iterlangs(langdata))
+    conn.commit()
+
+def run(glottolog_tree, outfile):
+    try:
+        os.remove(outfile)
+    except FileNotFoundError:
+        pass
+    langdata = create_langdata(glottolog_tree)
+    distances = create_distmat(langdata)
+    # Initialize database and create tables
+    conn = sqlite3.connect(outfile)
+    c = conn.cursor()
+    c.executescript(SQL_DDL)
+    conn.commit()
+    insert_languages(conn, langdata.values())
+    insert_paths(conn, langdata.values())
+    insert_distances(conn, distances)
+    insert_wals_codes(conn, langdata.values())
+    insert_iso_codes(conn, langdata.values())
+    insert_macroareas(conn, langdata.values())
 
 def main():
     with open(INPUTS['tree-glottolog'], 'r') as f:
         glottolog_tree = json.load(f)
-    run(glottolog_tree)
+    outfile = DBPATH
+    run(glottolog_tree, outfile)
 
 if __name__ == '__main__':
     main()
