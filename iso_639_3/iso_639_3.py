@@ -16,7 +16,7 @@ REGEXEN = (
     ("iso_639_3", r".*/iso-639-3_(\d+).tab"),
     ("iso_639_3_macrolanguages", r".*/iso-639-3-macrolanguages_(\d+)\.tab"),
     ("iso_639_3_Name_Index", r".*/iso-639-3_Name_Index_(\d+)\.tab"),
-    ("iso_639_3_Reitrements", r".*/iso-639-3_Retirements_(\d+)\.tab"))
+    ("iso_639_3_Retirements", r".*/iso-639-3_Retirements_(\d+)\.tab"))
 """ Regular expresssions for the tsv file associated with each table """
 
 
