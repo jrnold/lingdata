@@ -60,7 +60,6 @@ def create_tables(conn):
     )""")
     conn.commit()
 
-
 def set_sql_opts(con):
     con.isolation_level = "DEFERRED"
     con.execute("PRAGMA synchronous=OFF")
