@@ -11,7 +11,7 @@ suppressPackageStartupMessages({
   library("RSQLite")
 })
 
-URL <- "http://wals.info/static/download/wals-language.csv.zip"
+URL <- "https://cdstar.shh.mpg.de/bitstreams/EAEA0-28CA-1D0B-37B8-0/wals_language.csv.zip"
 INPUTS <- list(wals_updates = "wals-updates.csv")
 OUTFILE <- "wals.db"
 VERSION <- "1.0.0"
