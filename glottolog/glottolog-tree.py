@@ -10,7 +10,7 @@ import newick
 import requests
 
 URLS = {'glottolog-newick':
-        'http://glottolog.org/static/download/tree-glottolog-newick.txt'}
+        'https://cdstar.shh.mpg.de/bitstreams/EAEA0-F088-DE0E-0712-0/tree_glottolog_newick.txt'}
 
 
 def parse_node(x):

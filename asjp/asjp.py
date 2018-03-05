@@ -12,7 +12,7 @@ import Levenshtein
 import pandas as pd
 import requests
 
-URL = "http://asjp.clld.org/static/download/asjp-dataset.tab.zip"
+URL = "https://cdstar.shh.mpg.de/bitstreams/EAEA0-5E8D-A9F9-399E-0/asjp_dataset.tab.zip"
 
 
 def create_tables(conn):
@@ -59,6 +59,16 @@ def create_tables(conn):
         FOREIGN KEY (language_1) REFERENCES languages (language)
     )""")
     conn.commit()
+
+def set_sql_opts(con):
+    con.isolation_level = "DEFERRED"
+    con.execute("PRAGMA synchronous=OFF")
+    con.execute("PRAGMA journal_mode=MEMORY")
+
+
+def unset_sql_opts(con):
+    con.execute("PRAGMA synchronous=ON")
+    con.execute("PRAGMA journal_mode=WAL")
 
 
 def insert_meanings(conn):
@@ -122,6 +132,7 @@ def run(dbname):
 
     conn = sqlite3.connect(dbname)
     create_tables(conn)
+    set_sql_opts(conn)
     insert_meanings(conn)
 
     c = conn.cursor()
@@ -196,7 +207,7 @@ def run(dbname):
             print("Processed %d" % (i + 1))
             conn.commit()
     conn.commit()
-
+    unset_sql_opts(conn)
 
 def main():
     dbname = "ASJP.db"
