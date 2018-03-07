@@ -45,6 +45,7 @@ dumps/glottolog.sql.gz: glottolog/glottolog.db
 dumps/ethnologue.sql.gz: ethnologue/ethnologue.db
 	sqlite3 $< .dump | gzip -c > $@
 
+
 dist: dump
 	aws s3 sync dumps/ $(LINGDATA_S3_BUCKET)
 .PHONY: dist
