@@ -34,7 +34,7 @@ DBPATH = "glottolog.db"
 """
 
 SQL_DDL = """
-    CREATE TABLE languages (
+    CREATE TABLE languoids (
         glottocode CHAR(8) NOT NULL PRIMARY KEY,
         name CHAR,
         latitude REAL CHECK (latitude BETWEEN -90 AND 90),
@@ -55,8 +55,8 @@ SQL_DDL = """
         glottocode_to CHAR(8),
         dist INT CHECK (dist != 0), -- can be negative or positive
         PRIMARY KEY (glottocode, glottocode_to),
-        FOREIGN KEY (glottocode) REFERENCES languages (glottocode),
-        FOREIGN KEY (glottocode_to) REFERENCES languages (glottocode)
+            FOREIGN KEY (glottocode) REFERENCES languoids (glottocode),
+        FOREIGN KEY (glottocode_to) REFERENCES languoids (glottocode)
     );
     CREATE TABLE distances (
         glottocode_1 CHAR(8),
@@ -64,28 +64,28 @@ SQL_DDL = """
         shared INT CHECK (shared >= 0),
         geo REAL CHECK (geo >= 0),
         PRIMARY KEY (glottocode_1, glottocode_2),
-        FOREIGN KEY (glottocode_1) REFERENCES languages (glottocode),
-        FOREIGN KEY (glottocode_2) REFERENCES languages (glottocode)
+        FOREIGN KEY (glottocode_1) REFERENCES languoids (glottocode),
+        FOREIGN KEY (glottocode_2) REFERENCES languoids (glottocode)
     );
     CREATE TABLE wals_codes (
         glottocode CHAR(8) NOT NULL,
         wals_code CHAR(3) NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
     );
     CREATE TABLE iso_codes (
         glottocode CHAR(8) NOT NULL,
         iso_639_3 CHAR(3) NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
     );
     CREATE TABLE countries (
         glottocode CHAR(8) NOT NULL,
         country_code CHAR(2) NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
     );
     CREATE TABLE macroareas (
         glottocode CHAR(8) NOT NULL,
         macroarea TEXT NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languages (glottocode)
+        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
     );
 """
 
@@ -336,7 +336,7 @@ def create_distmat(newdata):
             yield (lang1["glottocode"], lang2["glottocode"], shared, geo.m)
 
 
-def insert_languages(conn, langdata):
+def insert_languoids(conn, langdata):
     """Insert language data into the database."""
     colnames = ('glottocode', 'name', 'latitude', 'longitude', 'level',
                 'status', 'bookkeeping', 'parent_id', 'family_id',
@@ -365,7 +365,7 @@ def insert_languages(conn, langdata):
 
     c = conn.cursor()
     sql = (
-        "INSERT INTO languages VALUES (%s)" % ', '.join(['?'] * len(colnames)))
+        "INSERT INTO languoids VALUES (%s)" % ', '.join(['?'] * len(colnames)))
     c.executemany(sql, iterrows(langdata))
     conn.commit()
 
@@ -467,7 +467,7 @@ def run(glottolog_tree, outfile):
     c = conn.cursor()
     c.executescript(SQL_DDL)
     conn.commit()
-    insert_languages(conn, langdata.values())
+    insert_languoids(conn, langdata.values())
     insert_paths(conn, langdata.values())
     insert_distances(conn, distances)
     insert_wals_codes(conn, langdata.values())

@@ -29,7 +29,7 @@ CREATE TABLE languages (
     FOREIGN KEY (macroarea) REFERENCES macroareas (macroarea)
 );
 
-CREATE TABLE langauage_countrycodes (
+CREATE TABLE language_countries (
     wals_code CHAR(3),
     countrycode CHAR(2),
     FOREIGN KEY (wals_code) REFERENCES languages (wals_code)
@@ -41,7 +41,7 @@ CREATE TABLE features (
     area TEXT
 );
 
-CREATE TABLE faeture_values (
+CREATE TABLE feature_values (
     feature_id CHAR(4) NOT NULL,
     value INT NOT NULL CHECK (value > 0),
     label TEXT NOT NULL,
