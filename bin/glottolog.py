@@ -12,6 +12,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 import requests
+import newick
 from geopy.distance import great_circle
 
 INPUTS = {'tree-glottolog': 'glottolog-tree.json'}
@@ -24,7 +25,10 @@ URLS = {
     ("https://cdstar.shh.mpg.de/bitstreams/EAEA0-F088-DE0E-0712-0/"
      "glottolog_languoid.csv.zip"),
     "resourcemap":
-    "http://glottolog.org/resourcemap.json?rsc=language"
+    "http://glottolog.org/resourcemap.json?rsc=language",
+    "glottolog-newick":
+    ("https://cdstar.shh.mpg.de/bitstreams/EAEA0-F088-DE0E-0712-0/"
+     "tree_glottolog_newick.txt")
 }
 
 DBPATH = "glottolog.db"
@@ -139,7 +143,7 @@ def set2str(x):
 
 
 def table_colnames(conn, table):
-    """ Get colnames of SQLITE table """
+    """Get colnames of SQLITE table."""
     c = conn.cursor()
     c.execute(f"SELECT * FROM {table}")
     r = c.fetchone()
@@ -147,7 +151,7 @@ def table_colnames(conn, table):
 
 
 def get_languoids():
-    """ Download Glottolog Languoids Data """
+    """Download Glottolog Languoids Data."""
     r = requests.get(URLS['languoids'])
     z = zipfile.ZipFile(io.BytesIO(r.content), 'r')
     with io.TextIOWrapper(z.open('languoid.csv', 'r')) as f:
@@ -180,6 +184,32 @@ def is_wals_lang_id(x):
 
 def is_iso_lang_id(x):
     return x['type'] == "iso639-3" and re.match("[a-z]{3}$", x['identifier'])
+
+
+def glottolog_tree():
+    """Parse Glottolog language tree."""
+    def parse_node(x):
+        node_pattern = """^'?
+            (?P<name> .* ) [ ]
+            \[ (?P<glottocode> [a-z0-9]{8} ) \]
+            (?: \[ (?P<iso_639_3> [a-z]{3} ) \] ) ?
+            (?P<language> -l- ) ?
+        '?$"""
+        m = re.match(node_pattern, x, re.X)
+        if m is not None:
+            out = m.groupdict()
+            out['language'] = out['language'] is not None
+            return out
+
+    def walk_tree(x):
+        node = parse_node(x.name)
+        node['children'] = [walk_tree(n) for n in x.descendants]
+        return node
+
+    url = URLS['glottolog-newick']
+    r = requests.get(url)
+    tree = newick.loads(r.text)
+    return [walk_tree(branch) for branch in tree]
 
 
 def walk_tree(x, depth=1, ancestors=[], family=None, newdata={}):
@@ -453,13 +483,13 @@ def insert_countries(conn, langdata):
     conn.commit()
 
 
-def run(glottolog_tree, outfile):
+def run(outfile):
     """Insert data in a SQLite database."""
     try:
         os.remove(outfile)
     except FileNotFoundError:
         pass
-    langdata = create_langdata(glottolog_tree)
+    langdata = create_langdata(glottolog_tree())
     distances = create_distmat(langdata)
     # Initialize database and create tables
     conn = sqlite3.connect(outfile)
@@ -479,10 +509,8 @@ def run(glottolog_tree, outfile):
 
 def main():
     """Command line interface."""
-    with open(INPUTS['tree-glottolog'], 'r') as f:
-        glottolog_tree = json.load(f)
     outfile = DBPATH
-    run(glottolog_tree, outfile)
+    run(outfile)
 
 
 if __name__ == '__main__':
