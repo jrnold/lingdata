@@ -5,7 +5,6 @@ import argparse
 import functools
 import io
 import itertools
-import os
 import re
 import sqlite3
 import zipfile
@@ -15,8 +14,6 @@ import pandas as pd
 import requests
 import newick
 from geopy.distance import great_circle
-
-INPUTS = {'tree-glottolog': 'glottolog-tree.json'}
 
 URLS = {
     "lang_geo":

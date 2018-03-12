@@ -11,10 +11,12 @@ suppressPackageStartupMessages({
   library("RSQLite")
 })
 
+args <- commandArgs(TRUE)
+db <- args[1]
+
 URL <- str_c("https://cdstar.shh.mpg.de/bitstreams/",
              "EAEA0-28CA-1D0B-37B8-0/wals_language.csv.zip")
 INPUTS <- list(wals_updates = "data-raw/wals-updates.csv")
-OUTFILE <- "wals.db"
 VERSION <- "1.0.0"
 
 # 1/2 circumference of the earth
@@ -53,7 +55,7 @@ wals <-
 assert_that(!any(duplicated(wals$wals_code)))
 
 #' The database should already have been created and initialized
-conn <- dbConnect(RSQLite::SQLite(), OUTFILE)   # nolint
+conn <- dbConnect(RSQLite::SQLite(), db)   # nolint
 
 write_table <- function(df, name) {
   # conn from the environment
