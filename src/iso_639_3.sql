@@ -1,3 +1,4 @@
+-- DDL for iso_639_3.db
 -- See http://www-01.sil.org/iso639-3/download.asp
 CREATE TABLE LangTypes (
   Type char(1) NOT NULL,

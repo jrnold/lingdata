@@ -1,5 +1,4 @@
--- create tables for the WALS SQLite database
-
+-- DDL for wals.db
 CREATE TABLE families (
     family TEXT NOT NULL PRIMARY KEY
 );

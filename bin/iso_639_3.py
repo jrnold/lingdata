@@ -1,4 +1,6 @@
-""" ISO 639-3 Code Tables Database """
+#!/usr/bin/env python3
+"""Download, process, and insert ISO 639-3 code tables into a database."""
+import argparse
 import io
 import re
 import sqlite3
@@ -21,7 +23,7 @@ REGEXEN = (
 
 
 def table2files(z):
-    """ Get the names of the files in the zipfile
+    """Get the names of the files in the zipfile.
 
     This function is needed since the filenames have dates.
     """
@@ -37,7 +39,7 @@ def table2files(z):
 
 
 def insert_data(db):
-    """ Insert data from the ISO 639-3 zipfile into the database """
+    """Insert data from the ISO 639-3 zipfile into the database."""
     conn = sqlite3.connect(db)
     r = requests.get(URL, stream=True)
     z = zipfile.ZipFile(io.BytesIO(r.content), 'r')
@@ -52,8 +54,11 @@ def insert_data(db):
 
 
 def main():
-    db = "iso_639_3.db"
-    insert_data(db)
+    """Command line interface."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("db", help="Path to SQLite database.")
+    args = parser.parse_arguments()
+    insert_data(args.db)
 
 
 if __name__ == '__main__':

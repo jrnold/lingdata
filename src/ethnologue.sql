@@ -1,3 +1,4 @@
+-- DDL for ethnologue.db
 -- Adapted from https://www.ethnologue.com/codes/code-table-structure
 CREATE TABLE CountryCodes (
    CountryID  CHAR(2) NOT NULL,  -- Two-letter code from ISO3166

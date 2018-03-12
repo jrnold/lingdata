@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # coding: utf-8
+"""Download Glottolog data, process it, and save it to a SQLite database."""
 import functools
 import io
 import itertools
-import json
 import os
 import re
 import sqlite3
@@ -37,76 +37,22 @@ DBPATH = "glottolog.db"
 - depth: It is a family if depth = 1.
 """
 
-SQL_DDL = """
-    CREATE TABLE languoids (
-        glottocode CHAR(8) NOT NULL PRIMARY KEY,
-        name CHAR,
-        latitude REAL CHECK (latitude BETWEEN -90 AND 90),
-        longitude REAL CHECK (longitude BETWEEN -180 AND 180),
-        level TEXT CHECK (level IN ('family', 'language', 'dialect')),
-        status TEXT,
-        bookkeeping BOOLEAN,
-        parent_id CHAR(8),
-        family_id CHAR(8),
-        child_family_count INT,
-        child_language_count INT,
-        child_dialect_count INT,
-        depth INT CHECK (depth > 0),
-        subtree_depth INT CHECK (subtree_depth >= 0)
-    );
-    CREATE TABLE paths (
-        glottocode CHAR(8),
-        glottocode_to CHAR(8),
-        dist INT CHECK (dist != 0), -- can be negative or positive
-        PRIMARY KEY (glottocode, glottocode_to),
-            FOREIGN KEY (glottocode) REFERENCES languoids (glottocode),
-        FOREIGN KEY (glottocode_to) REFERENCES languoids (glottocode)
-    );
-    CREATE TABLE distances (
-        glottocode_1 CHAR(8),
-        glottocode_2 CHAR(8),
-        shared INT CHECK (shared >= 0),
-        geo REAL CHECK (geo >= 0),
-        PRIMARY KEY (glottocode_1, glottocode_2),
-        FOREIGN KEY (glottocode_1) REFERENCES languoids (glottocode),
-        FOREIGN KEY (glottocode_2) REFERENCES languoids (glottocode)
-    );
-    CREATE TABLE wals_codes (
-        glottocode CHAR(8) NOT NULL,
-        wals_code CHAR(3) NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
-    );
-    CREATE TABLE iso_codes (
-        glottocode CHAR(8) NOT NULL,
-        iso_639_3 CHAR(3) NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
-    );
-    CREATE TABLE countries (
-        glottocode CHAR(8) NOT NULL,
-        country_code CHAR(2) NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
-    );
-    CREATE TABLE macroareas (
-        glottocode CHAR(8) NOT NULL,
-        macroarea TEXT NOT NULL,
-        FOREIGN KEY (glottocode) REFERENCES languoids (glottocode)
-    );
-"""
-
 
 def set_sql_opts(con):
+    """Set SQL options for batch input."""
     con.isolation_level = "DEFERRED"
     con.execute("PRAGMA synchronous=OFF")
     con.execute("PRAGMA journal_mode=MEMORY")
 
 
 def unset_sql_opts(con):
+    """Unset SQL options for batch input."""
     con.execute("PRAGMA synchronous=ON")
     con.execute("PRAGMA journal_mode=WAL")
 
 
 def geomean(long, lat, w=None):
-    """ Mean location for spherical coordinates that
+    """Mean location for spherical coordinates.
 
     Parameters
     -----------
@@ -139,11 +85,12 @@ def geomean(long, lat, w=None):
 
 
 def set2str(x):
+    """Convert list or set ``x`` to a space separated string."""
     return ' '.join(x) if len(x) else None
 
 
 def table_colnames(conn, table):
-    """Get colnames of SQLITE table."""
+    """Get the colnames of SQLite table ``table`` from connection ``conn``."""
     c = conn.cursor()
     c.execute(f"SELECT * FROM {table}")
     r = c.fetchone()
@@ -170,25 +117,30 @@ def get_languoids():
 
 
 def get_lang_geo():
+    """Download geographic information for Glottolog languoids."""
     out = pd.read_csv(URLS['lang_geo'], index_col="glottocode")
     return out.loc[:, ('macroarea', )]
 
 
 def get_resourcemap():
+    """Download the Glottolog reourcemap data."""
     return requests.get(URLS['resourcemap']).json()
 
 
 def is_wals_lang_id(x):
+    """Check if identifier ``x`` is a WALS language."""
     return x['type'] == "wals" and re.match("[a-z]{2,3}$", x['identifier'])
 
 
 def is_iso_lang_id(x):
+    """Check if identifier ``x`` is a ISO 639-3 language."""
     return x['type'] == "iso639-3" and re.match("[a-z]{3}$", x['identifier'])
 
 
 def glottolog_tree():
-    """Parse Glottolog language tree."""
+    """Download and parse the Glottolog language tree."""
     def parse_node(x):
+        """Parse each node in the Newick tree."""
         node_pattern = """^'?
             (?P<name> .* ) [ ]
             \[ (?P<glottocode> [a-z0-9]{8} ) \]
@@ -202,6 +154,7 @@ def glottolog_tree():
             return out
 
     def walk_tree(x):
+        """Walk the language tree."""
         node = parse_node(x.name)
         node['children'] = [walk_tree(n) for n in x.descendants]
         return node
@@ -213,9 +166,9 @@ def glottolog_tree():
 
 
 def walk_tree(x, depth=1, ancestors=[], family=None, newdata={}):
-    """Depth first search through tree.
+    """Depth first traversal of the the Glottolog tree.
 
-    Fills in ids, gets list of ancestors and descendants
+    While traversing the tree this fills in lists of ancestors and descendants.
     """
     glottocode = x["glottocode"]
     data = newdata[glottocode]
@@ -292,7 +245,7 @@ def walk_tree(x, depth=1, ancestors=[], family=None, newdata={}):
 
 
 def topdown_fill(x, newdata={}):
-    """ Fill in data from parents """
+    """Fill in data from parents."""
     data = newdata[x['glottocode']]
     if data['parent']:
         parent = newdata[data['parent']]
@@ -307,6 +260,7 @@ def topdown_fill(x, newdata={}):
 
 
 def create_langdata(glottolog_tree):
+    """Create Glottolog language data."""
     # Get external data
     resourcemap = get_resourcemap()
     languoids = get_languoids()
@@ -353,6 +307,7 @@ def create_langdata(glottolog_tree):
 
 
 def create_distmat(newdata):
+    """Create the language distance matrix."""
     langsdata = [
         x for x in newdata.values()
         if x['level'] in ("language", "dialect") and "family" in x
@@ -374,6 +329,7 @@ def insert_languoids(conn, langdata):
                 'child_dialect_count', 'depth', 'subtree_depth')
 
     def iterrows(langdata):
+        """Iterate over each row in the table."""
         for lang in langdata:
             row = (
                 lang['glottocode'],
@@ -401,6 +357,7 @@ def insert_languoids(conn, langdata):
 
 
 def insert_paths(conn, langdata):
+    """Insert data into the paths table."""
     def iterlangs(langdata):
         # Get ancestors
         for lang in langdata:
@@ -433,7 +390,6 @@ def insert_distances(conn, distances):
 
 def insert_iso_codes(conn, langdata):
     """Insert Glottlog-ISO 369-3 codes into the database."""
-
     def iterlangs(langdata):
         for lang in langdata:
             for iso_code in lang['iso_639_3']:
@@ -447,7 +403,6 @@ def insert_iso_codes(conn, langdata):
 
 def insert_wals_codes(conn, langdata):
     """Insert Glottlog-WALS mappings into the database."""
-
     def iterlangs(langdata):
         for lang in langdata:
             for wals_code in lang['wals_codes']:
@@ -460,6 +415,7 @@ def insert_wals_codes(conn, langdata):
 
 
 def insert_macroareas(conn, langdata):
+    """Insert data into the macroareas table of the Glottolog database."""
     def iterlangs(langdata):
         for lang in langdata:
             for macroarea in lang['macroarea']:
@@ -472,6 +428,7 @@ def insert_macroareas(conn, langdata):
 
 
 def insert_countries(conn, langdata):
+    """Insert countries into the Glottolog database."""
     def iterlangs(langdata):
         for lang in langdata:
             for country in lang['country_ids']:
@@ -494,9 +451,6 @@ def run(outfile):
     # Initialize database and create tables
     conn = sqlite3.connect(outfile)
     set_sql_opts(conn)
-    c = conn.cursor()
-    c.executescript(SQL_DDL)
-    conn.commit()
     insert_languoids(conn, langdata.values())
     insert_paths(conn, langdata.values())
     insert_distances(conn, distances)
