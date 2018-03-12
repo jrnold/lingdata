@@ -30,8 +30,8 @@ def insert_data(db):
 def main():
     """Command line interface."""
     parser = argparse.ArgumentParser()
-    parser.add_arguments("db", help="Path to SQLite database.")
-    args = parser.parse_arguments()
+    parser.add_argument("db", help="Path to SQLite database.")
+    args = parser.parse_args()
     insert_data(args.db)
 
 

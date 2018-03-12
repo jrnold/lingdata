@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding: utf-8
 """Download Glottolog data, process it, and save it to a SQLite database."""
+import argparse
 import functools
 import io
 import itertools
@@ -31,7 +32,6 @@ URLS = {
      "tree_glottolog_newick.txt")
 }
 
-DBPATH = "glottolog.db"
 """
 - subtree_depth: It is a leaf node if = 0, but this is more general
 - depth: It is a family if depth = 1.
@@ -442,10 +442,6 @@ def insert_countries(conn, langdata):
 
 def run(outfile):
     """Insert data in a SQLite database."""
-    try:
-        os.remove(outfile)
-    except FileNotFoundError:
-        pass
     langdata = create_langdata(glottolog_tree())
     distances = create_distmat(langdata)
     # Initialize database and create tables
@@ -463,8 +459,10 @@ def run(outfile):
 
 def main():
     """Command line interface."""
-    outfile = DBPATH
-    run(outfile)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("db", help="Path to SQLite database.")
+    args = parser.parse_args()
+    run(args.db)
 
 
 if __name__ == '__main__':

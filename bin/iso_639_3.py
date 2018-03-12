@@ -57,7 +57,7 @@ def main():
     """Command line interface."""
     parser = argparse.ArgumentParser()
     parser.add_argument("db", help="Path to SQLite database.")
-    args = parser.parse_arguments()
+    args = parser.parse_args()
     insert_data(args.db)
 
 

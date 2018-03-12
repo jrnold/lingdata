@@ -33,7 +33,7 @@ data/asjp.db: bin/asjp.py src/asjp.sql data-raw/ASJP_meanings.json
 
 #### Glottolog Data ####
 
-glottolog: data/glottolob.db
+glottolog: data/glottolog.db
 .PHONY: glottolog
 
 data/glottolog.db: bin/glottolog.py src/glottolog.sql

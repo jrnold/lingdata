@@ -5,6 +5,7 @@ import io
 import itertools
 import json
 import os
+import os.path
 import re
 import sqlite3
 import zipfile
@@ -35,7 +36,7 @@ def unset_sql_opts(con):
 
 def insert_meanings(conn):
     """Insert data into the ``meanings`` table."""
-    with open('ASJP_meanings.json', 'r') as f:
+    with open(os.path.join('data-raw', 'ASJP_meanings.json'), 'r') as f:
         meanings = json.load(f)
     c = conn.cursor()
     for meaning, v in meanings.items():
@@ -114,11 +115,6 @@ def run(dbname):
     """
     r = requests.get(URL, stream=True)
     asjp_dataset = zipfile.ZipFile(io.BytesIO(r.content))
-
-    try:
-        os.remove(dbname)
-    except FileNotFoundError:
-        pass
 
     conn = sqlite3.connect(dbname)
     set_sql_opts(conn)
