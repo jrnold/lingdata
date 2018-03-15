@@ -66,7 +66,7 @@ data/ethnologue.db: bin/ethnologue.py src/ethnologue.sql
 
 #### Dump databases ####
 
-dump: $(DB:%=dumps/%.sql.gz)
+dump: $(DB:%=data/%.sql.gz)
 .PHONY: dump
 
 data/%.sql.gz: data/%.db
@@ -76,5 +76,5 @@ data/%.sql.gz: data/%.db
 #### Push data to S3 ####
 
 dist: dump
-	aws s3 sync dumps/ $(LINGDATA_S3_BUCKET)
+	aws s3 sync data/ $(LINGDATA_S3_BUCKET)
 .PHONY: dist
