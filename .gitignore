@@ -5,3 +5,4 @@
 __pycache__
 .Rhistory
 *.sql.gz
+.Rproj.user
