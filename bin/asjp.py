@@ -19,7 +19,7 @@ import argparse
 
 URL = ("https://cdstar.shh.mpg.de/bitstreams/EAEA0-5E8D-A9F9-399E-0/"
        "asjp_dataset.tab.zip")
-
+DOWNLOAD_DIR = "downloads"
 
 def set_sql_opts(con):
     """Set SQL options to speed up loading data."""
@@ -105,6 +105,13 @@ def compare_langs(lang1, lang2):
     if d:
         return (lang1[0], lang2[0], d['ldn'], d['ldnd'], d['M'])
 
+def download_file(url, dst):
+    os.makedirs(dst, exist_ok=True)
+    downloaded_file = os.path.join(dst, os.path.basename(url)))
+    if not os.path.exists(downloaded_file):
+      r = requests.get(url, stream=True)
+      with open(downloaded_file, 'wb') as f:
+        f.write(r.content)
 
 def run(dbname):
     """Download ASJP data, process, and insert into a database.
@@ -113,13 +120,11 @@ def run(dbname):
     before running this.
 
     """
-    r = requests.get(URL, stream=True)
-    asjp_dataset = zipfile.ZipFile(io.BytesIO(r.content))
-
+    download_file(URL, DOWNLOAD_DIR)
+    asjp_dataset = zipfile.ZipFile(downloaded_file)
     conn = sqlite3.connect(dbname)
     set_sql_opts(conn)
     insert_meanings(conn)
-
     c = conn.cursor()
     with asjp_dataset.open('dataset.tab', 'r') as f:
         data = pd.read_csv(f, delimiter='\t', encoding='CP1252')

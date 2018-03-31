@@ -5,6 +5,8 @@ import argparse
 import functools
 import io
 import itertools
+import os
+import os.path
 import re
 import sqlite3
 import zipfile
@@ -29,10 +31,23 @@ URLS = {
      "tree_glottolog_newick.txt")
 }
 
+DOWNLOAD_DIR = "downloads"
+
 """
 - subtree_depth: It is a leaf node if = 0, but this is more general
 - depth: It is a family if depth = 1.
 """
+
+
+def download_file(url, dst):
+    """Download url to dst if it does not exists."""
+    os.makedirs(dst, exist_ok=True)
+    outfile = os.path.join(dst, os.path.basename(url))
+    if not os.path.exists(outfile):
+      r = requests.get(url, stream=True)
+      with open(outfile, 'wb') as f:
+        f.write(r.content)
+    return outfile
 
 
 def set_sql_opts(con):
@@ -96,8 +111,7 @@ def table_colnames(conn, table):
 
 def get_languoids():
     """Download Glottolog Languoids Data."""
-    r = requests.get(URLS['languoids'])
-    z = zipfile.ZipFile(io.BytesIO(r.content), 'r')
+    z = zipfile.ZipFile(download_file(URLS['languoids'], DOWNLOAD_DIR))
     with io.TextIOWrapper(z.open('languoid.csv', 'r')) as f:
         languoids = pd.read_csv(f)
     languoids = languoids.loc[:, (
