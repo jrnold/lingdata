@@ -39,7 +39,8 @@ CREATE TABLE LanguageIndex (
    LangID    CHAR(3) NOT NULL,
    CountryID CHAR(2) NOT NULL,
    NameType  CHAR(2) NOT NULL,
-   Name  VARCHAR NOT NULL,
+   -- Some are null for whatever reason
+   Name  VARCHAR,
    PRIMARY KEY (LangID, CountryID, NameType, Name),
    FOREIGN KEY (CountryID) REFERENCES CountryCodes (CountryID),
    FOREIGN KEY (LangID) REFERENCES LanguageCode (LangID),

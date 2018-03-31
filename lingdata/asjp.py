@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Download ASJP data, process, and save to a SQLite database."""
+import argparse
 import collections
-import io
 import itertools
 import json
 import os
@@ -13,25 +13,12 @@ from collections import defaultdict
 
 import Levenshtein
 import pandas as pd
-import requests
 
-import argparse
+from .utils import set_sql_opts, unset_sql_opts, download_file
 
 URL = ("https://cdstar.shh.mpg.de/bitstreams/EAEA0-5E8D-A9F9-399E-0/"
        "asjp_dataset.tab.zip")
 DOWNLOAD_DIR = "downloads"
-
-def set_sql_opts(con):
-    """Set SQL options to speed up loading data."""
-    con.isolation_level = "DEFERRED"
-    con.execute("PRAGMA synchronous=OFF")
-    con.execute("PRAGMA journal_mode=MEMORY")
-
-
-def unset_sql_opts(con):
-    """Unset SQL options that sped up loading data."""
-    con.execute("PRAGMA synchronous=ON")
-    con.execute("PRAGMA journal_mode=WAL")
 
 
 def insert_meanings(conn):
@@ -105,13 +92,6 @@ def compare_langs(lang1, lang2):
     if d:
         return (lang1[0], lang2[0], d['ldn'], d['ldnd'], d['M'])
 
-def download_file(url, dst):
-    os.makedirs(dst, exist_ok=True)
-    downloaded_file = os.path.join(dst, os.path.basename(url)))
-    if not os.path.exists(downloaded_file):
-      r = requests.get(url, stream=True)
-      with open(downloaded_file, 'wb') as f:
-        f.write(r.content)
 
 def run(dbname):
     """Download ASJP data, process, and insert into a database.
@@ -120,7 +100,8 @@ def run(dbname):
     before running this.
 
     """
-    download_file(URL, DOWNLOAD_DIR)
+    downloaded_file = download_file(URL, DOWNLOAD_DIR)
+    print(downloaded_file)
     asjp_dataset = zipfile.ZipFile(downloaded_file)
     conn = sqlite3.connect(dbname)
     set_sql_opts(conn)

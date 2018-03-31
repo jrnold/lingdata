@@ -5,8 +5,6 @@ import argparse
 import functools
 import io
 import itertools
-import os
-import os.path
 import re
 import sqlite3
 import zipfile
@@ -16,6 +14,8 @@ import pandas as pd
 import requests
 import newick
 from geopy.distance import great_circle
+
+from .utils import set_sql_opts, unset_sql_opts, download_file, DOWNLOAD_DIR
 
 URLS = {
     "lang_geo":
@@ -30,37 +30,6 @@ URLS = {
     ("https://cdstar.shh.mpg.de/bitstreams/EAEA0-F088-DE0E-0712-0/"
      "tree_glottolog_newick.txt")
 }
-
-DOWNLOAD_DIR = "downloads"
-
-"""
-- subtree_depth: It is a leaf node if = 0, but this is more general
-- depth: It is a family if depth = 1.
-"""
-
-
-def download_file(url, dst):
-    """Download url to dst if it does not exists."""
-    os.makedirs(dst, exist_ok=True)
-    outfile = os.path.join(dst, os.path.basename(url))
-    if not os.path.exists(outfile):
-      r = requests.get(url, stream=True)
-      with open(outfile, 'wb') as f:
-        f.write(r.content)
-    return outfile
-
-
-def set_sql_opts(con):
-    """Set SQL options for batch input."""
-    con.isolation_level = "DEFERRED"
-    con.execute("PRAGMA synchronous=OFF")
-    con.execute("PRAGMA journal_mode=MEMORY")
-
-
-def unset_sql_opts(con):
-    """Unset SQL options for batch input."""
-    con.execute("PRAGMA synchronous=ON")
-    con.execute("PRAGMA journal_mode=WAL")
 
 
 def geomean(long, lat, w=None):
