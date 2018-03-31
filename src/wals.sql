@@ -61,11 +61,11 @@ CREATE TABLE language_features (
 CREATE TABLE distances (
     wals_code_1 CHAR(3) NOT NULL,
     wals_code_2 CHAR(3) NOT NULL,
-    geo REAL CHECK (geo >= 0 and geo <= 1),
-    clade REAL CHECK (clade >= 0 and clade <= 1),
-    features REAL CHECK (features >= 0 and features <= 1),
-    PRIMARY KEY (wals_code_1, wals_code_2),
+    variable VARCHAR NOT NULL,
+    value REAL CHECK (value >= 0 and value <= 1),
+    PRIMARY KEY (wals_code_1, wals_code_2, variable),
     FOREIGN KEY (wals_code_1) REFERENCES languages (wals_code),
     FOREIGN KEY (wals_code_2) REFERENCES languages (wals_code),
-    CHECK (wals_code_1 < wals_code_2)
+    CHECK (wals_code_1 < wals_code_2),
+    CHECK (variable IN ('geo', 'clade', 'features'))
 );

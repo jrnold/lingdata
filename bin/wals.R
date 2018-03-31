@@ -16,11 +16,19 @@ db <- args[1]
 
 URL <- str_c("https://cdstar.shh.mpg.de/bitstreams/",
              "EAEA0-28CA-1D0B-37B8-0/wals_language.csv.zip")
+DOWNLOAD_DIR <- "downloads"
 INPUTS <- list(wals_updates = "data-raw/wals-updates.csv")
 VERSION <- "1.0.0"
 
 # 1/2 circumference of the earth
 ANTIPODE_DIST <- base::pi * 6378137
+
+
+walszipfile <- here::here(DOWNLOAD_DIR, basename(URL))
+if (!file.exists(walszipfile)) {
+  dir.create(DOWNLOAD_DIR, showWarnings = FALSE, recursive = TRUE)
+  download.file(URL, walszipfile)
+}
 
 # Load WALS data and patch it to fix some issues in the data
 wals_updates <- read_csv(INPUTS$wals_updates,
@@ -31,8 +39,6 @@ wals_updates <- read_csv(INPUTS$wals_updates,
                              iso_code = col_character(),
                              macroarea = col_character()
                            ))
-walszipfile <- tempfile()
-download.file(URL, walszipfile)
 
 wals <-
   read_csv(unz(walszipfile, "language.csv"),
@@ -180,13 +186,13 @@ feature_dist <- feature_comp %>%
   summarise(value = sum(diff) / length(diff)) %>%
   mutate(variable = "features")
 
-feature_dist_area <- feature_comp %>%
-  left_join(select(wals_features, feature_id, area),
-            by = "feature_id") %>%
-  mutate(variable = str_to_lower(str_replace(area, " +", "_"))) %>%
-  group_by(wals_code_1, wals_code_2, variable) %>%
-  summarise(value = sum(diff) / length(diff))
+# feature_dist_area <- feature_comp %>%
+#   left_join(select(wals_features, feature_id, area),
+#             by = "feature_id") %>%
+#   mutate(variable = str_to_lower(str_replace(area, " +", "_"))) %>%
+#   group_by(wals_code_1, wals_code_2, variable) %>%
+#   summarise(value = sum(diff) / length(diff))
 
-bind_rows(dist_geo_clade, feature_dist, feature_dist_area) %>%
+bind_rows(dist_geo_clade, feature_dist) %>%
   arrange(variable, wals_code_1, wals_code_2) %>%
   write_table("distances")
